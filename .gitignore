@@ -46,3 +46,4 @@ models/pretrained/
 *.m4a
 *.wav
 .mypy_cache/ 
+cache/

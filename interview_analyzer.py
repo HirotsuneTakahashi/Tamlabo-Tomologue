@@ -39,6 +39,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from collections import Counter, defaultdict
+import platform  # OSを判定するために追加
+import matplotlib  # rcParamsを直接設定するために追加
 
 # 音声処理関連
 from pydub import AudioSegment
@@ -55,8 +57,8 @@ from sklearn.cluster import AgglomerativeClustering
 
 # 可視化関連
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
 import seaborn as sns
+import japanize_matplotlib
 
 # プログレスバー
 from tqdm.auto import tqdm
@@ -77,29 +79,32 @@ os.environ['SSL_CERT_FILE'] = certifi.where()
 os.environ["OMP_NUM_THREADS"] = "1"
 torch.set_num_threads(1)
 
-# 日本語フォントの設定（matplotlibでの日本語表示用）
-try:
-    # macOSの場合
-    plt.rcParams['font.family'] = 'Hiragino Sans'
-except:
-    try:
-        # Windowsの場合
-        plt.rcParams['font.family'] = 'MS Gothic'
-    except:
-        try:
-            # Linuxの場合
-            plt.rcParams['font.family'] = 'Noto Sans CJK JP'
-        except:
-            # フォールバック：システムにある日本語フォントを自動検出
-            japanese_fonts = [f.name for f in fm.fontManager.ttflist if 'japan' in f.name.lower() or 'hiragino' in f.name.lower() or 'noto' in f.name.lower()]
-            if japanese_fonts:
-                plt.rcParams['font.family'] = japanese_fonts[0]
-            else:
-                print("警告: 日本語フォントが見つかりません。グラフの日本語が文字化けする可能性があります。")
-
 # グラフのスタイル設定
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")
+
+# --- ▼ここからフォント設定を追加 ▼ ---
+try:
+    system_name = platform.system()
+    if system_name == "Darwin":  # macOSの場合
+        # ヒラギノフォントを指定。システムにインストールされている正確な名前を確認してください。
+        # 一般的なヒラギノフォントの候補を優先順にリストします。
+        matplotlib.rcParams['font.family'] = ['Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'IPAexGothic', 'sans-serif']
+    elif system_name == "Windows":  # Windowsの場合
+        # MeiryoやYu Gothicなどを指定
+        matplotlib.rcParams['font.family'] = ['Meiryo', 'Yu Gothic', 'MS Gothic', 'IPAexGothic', 'sans-serif']
+    else:  # Linuxやその他のOSの場合
+        # japanize-matplotlibがIPAexGothicを適切に設定することを期待しつつ、
+        # 他のフォントも候補に入れることができます。
+        matplotlib.rcParams['font.family'] = ['IPAexGothic', 'Noto Sans CJK JP', 'TakaoPGothic', 'sans-serif']
+    
+    print(f"OS: {system_name}, 設定されたフォントファミリー: {matplotlib.rcParams['font.family']}")
+
+except Exception as e:
+    print(f"フォント設定中にエラーが発生しました: {e}")
+    # フォント設定に失敗した場合でも、japanize-matplotlibのデフォルト設定に期待します。
+    pass
+# --- ▲ここまでフォント設定を追加 ▲ ---
 
 # ==============================================================================
 # 3. ファイルパスの定義
@@ -646,41 +651,30 @@ class InterviewSpeechAnalyzer:
 
     def create_visualization_charts(self, segments: list, metrics: dict):
         """
-        分析結果の可視化グラフを作成
+        分析結果の可視化チャートを作成
         
         Args:
             segments (list): 分析済みセグメントリスト
             metrics (dict): 計算済み評価指標
             
         Notes:
-            以下のグラフを作成します：
-            1. 評価指標レーダーチャート
-            2. 発話パターン分析グラフ
-            3. 時系列発話パターン
-            4. 応答速度分布
+            以下のチャートを作成します：
+            1. レーダーチャート（総合評価）
+            2. パターン分析（詳細）
+            3. 時系列チャート
+            4. 応答速度分析
         """
-        print("⑤ 可視化グラフ作成")
+        print("⑤ 可視化チャート作成")
         start_time = time.time()
         
-        # グラフ出力用ディレクトリの作成
-        OUTPUT_DIR.mkdir(exist_ok=True)
-        
-        # === 1. 評価指標レーダーチャート ===
+        # チャート作成
         self._create_radar_chart(metrics)
-        
-        # === 2. 発話パターン分析バーチャート ===
         self._create_pattern_analysis_chart(metrics)
-        
-        # === 3. 時系列発話分析 ===
         self._create_timeline_chart(segments, metrics)
-        
-        # === 4. 応答速度分布 ===
-        if metrics.get("response_times"):
-            self._create_response_time_chart(metrics)
+        self._create_response_time_chart(metrics)
         
         duration = time.time() - start_time
-        print(f"   ✓ 可視化グラフ作成完了 ({duration:.1f}秒)")
-        print(f"   保存先: {OUTPUT_DIR}/*.png\n")
+        print(f"   ✓ チャート作成完了 ({duration:.1f}秒)\n")
 
     def _create_radar_chart(self, metrics: dict):
         """評価指標レーダーチャートの作成"""
